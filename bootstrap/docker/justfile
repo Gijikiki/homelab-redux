@@ -1,0 +1,21 @@
+# Justfile to manage Docker image for the homelab bootstrap
+
+# Variables
+DOCKER_IMAGE_NAME := "homelab-bootstrap"
+DOCKER_CONTAINER_NAME := "homelab-bootstrap-container"
+DOCKERFILE_PATH := "./Dockerfile.bootstrap"
+
+# Build the Docker image
+build:
+    @echo "Building the Docker image..."
+    docker build -t "{{ DOCKER_IMAGE_NAME }}" -f "{{ DOCKERFILE_PATH }}" .
+
+# Run the Docker container
+run:
+    @echo "Running the Docker container..."
+    docker run --name "{{ DOCKER_CONTAINER_NAME }}" -it --rm "{{ DOCKER_IMAGE_NAME }}"
+
+# Clean the Docker image
+clean:
+    @echo "Cleaning up the Docker image..."
+    docker rmi "{{ DOCKER_IMAGE_NAME }}" --force

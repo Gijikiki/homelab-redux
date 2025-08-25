@@ -1,0 +1,47 @@
+# Dockerfile for Bootstrap Image
+
+# Use Debian as the base image
+FROM debian:stable
+
+# Build a debuggable image
+ARG USE_DEBUG=true
+
+
+
+# Install necessary packages for DHCP and TFTP servers
+RUN apt-get update && \
+    apt-get install -y isc-dhcp-server tftpd-hpa
+
+RUN bash -c \
+    'if [ "$USE_DEBUG" = "true" ]; then \
+        echo "Building for debugging..."; \
+        apt-get install -y procps less; \
+    else \
+        echo "Building for production..."; \
+        rm -rf /var/lib/apt/lists/*; \
+    fi'
+# && \
+# FIXME: Remove after image is finalized
+#    rm -rf /var/lib/apt/lists/*
+
+# Configure DHCP server
+# RUN mkdir -p /etc/dhcp/
+# COPY configs/dhcpd.conf /etc/dhcp/dhcpd.conf
+
+# Configure TFTP server
+RUN mkdir -p /var/tftpboot && \
+    chmod -R 755 /var/tftpboot
+COPY configs/tftpboot /var/tftpboot
+RUN chmod -R 755 /var/tftpboot
+
+# Expose necessary ports for PXE boot
+EXPOSE 67/udp 69/udp
+
+# Start both services
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set the entrypoint
+# ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# FIXME:  Initial build test - using /bin/sh
+ENTRYPOINT ["/bin/bash"]
