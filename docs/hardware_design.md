@@ -19,7 +19,7 @@ but also for their low energy consumption, which reduces ongoing operational
 costs. This design ensures that the lab remains sustainable over time without
 unnecessary expense.
 
-## Resource Constraints
+## Resource Constraints or Making Problems for Yourself
 Operating within defined resource limits allows the lab to simulate real-world
 challenges effectively. Overprovisioning hardware can mask configuration
 issues, as excess resources may enable poorly configured software to function.
@@ -38,13 +38,23 @@ The design emphasizes the following principles:
 - **Efficiency:** Prioritizing energy and resource optimization.
 
 ### Hardware
+
+NOTE: The current hardware setup was due to choices made several years ago, taking
+in account prices on the used and new market, as well as purpose.
+The hardware landscape has changed over time.  There's a lot of mini-PCs,
+thin clients, etc, and one should do their own research.  One thing to pay
+attention to is lease cycles and how this affects the used market.  Another
+thing to consider is the cost of ram, storage type, any onboard NICs,
+etc, as well as any need for GPUs for LLM experimentation.  Everyone's use
+case will differ.
+
 The current setup utilizes HP t730 thin clients, repurposed as servers. These
 are chosen for their availability, affordability, and suitability for
 virtualization:
 
-- **Cost:** Approximately $100 each on the aftermarket.
+- **Cost:** Approximately $100 each on the aftermarket at the time.
 - **Upgrades:** Easily expandable to 16GB of RAM (~$35) and 1TB M.2 SSDs (~$60).
-- **Power Consumption:** Consumes under 100W collectively (3 systems + two switches).
+- **Power Consumption:** Consumes well under 100W collectively (3 systems + two switches).
 
 Alternative options include micro systems such as Dell Micro Optiplex or Lenovo
 ThinkCentre Tiny. While these may offer advantages like smaller size and
