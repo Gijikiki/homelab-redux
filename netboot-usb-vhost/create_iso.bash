@@ -3,6 +3,7 @@
 SCRIPT_DIR="$(cd $(dirname '${BASH_SOURCE[0]}') && pwd)"
 DEBUG=1		# If undefined, no debug messages
 TMP_DIR="${SCRIPT_DIR}/tmp"
+EFI_IMG="boot/grub/efi.img"			# Location in iso
 OUTPUT_ISO="${SCRIPT_DIR}/custom.iso"
 PRESEED_FILE="${SCRIPT_DIR}/preseed.cfg"
 INSTALL_ARCH_DIR="${TMP_DIR}/install.amd"
@@ -44,10 +45,18 @@ check_iso_var() {
 	fi
 }
 
+check_isohybrid_mbr() {
+	if [ -f "/usr/lib/ISOLINUX/isohdpfx.bin" ]; then
+		debug "isohdpfx.bin found"
+	else
+		fatal "/usr/lib/ISOLINUX/isohdpfx.bin is missing, install isolinux pkg"
+	fi
+}
+
 verify_empty_dir() {
 	debug "$TMP_DIR"
 	if [ -d "$TMP_DIR" ] && [ -z "$(ls -A "$TMP_DIR")" ]; then
-		debug "$TMP_DIR) is empty"
+		debug "$TMP_DIR is empty"
 	else
 		fatal "$TMP_DIR is not empty or does not exist"
 	fi
@@ -99,17 +108,20 @@ regenerate_md5sums() {
 rebuild_iso_image() {
 	# Create the iso image
 	debug "Creating the ISO image"
-	genisoimage -o "$OUTPUT_ISO" \
-		-b isolinux/isolinux.bin \
-		-c isolinux/boot.cat \
-		-no-emul-boot \
-		-boot-load-size 4 \
-		-boot-info-table \
-		-r -J \
-		"$TMP_DIR" > "$LOG_DIR/genisoimage.log" 2>&1
 
-	debug "Making ISO work with USB drives"
-	isohybrid "$OUTPUT_ISO"
+	xorriso -as mkisofs \
+		-o "$OUTPUT_ISO" \
+		-r -J \
+		-isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
+		-partition_offset 16 \
+		-eltorito-boot isolinux/isolinux.bin \
+		-eltorito-catalog isolinux/boot.cat \
+		-no-emul-boot -boot-load-size 4 -boot-info-table \
+		-eltorito-alt-boot \
+		-e "$EFI_IMG" \
+		-no-emul-boot \
+		-isohybrid-gpt-basdat \
+		"$TMP_DIR" # > "$LOG_DIR/xorriso.log" # 2>&1
 
 	debug "ISO image created"
 }
@@ -126,12 +138,13 @@ create_preseed_iso() {
 	echo "Preseed ISO can be found at '$OUTPUT_ISO'"
 }
 
+# Prep
 check_iso_var
+check_isohybrid_mbr
 check_command 7z		# For extracting iso image
-check_command genisoimage	# For recreating iso image
+check_command xorriso		# For recreating iso image
 check_command gunzip
 check_command cpio
-check_command isohybrid
 
+# Making the image
 create_preseed_iso
-
