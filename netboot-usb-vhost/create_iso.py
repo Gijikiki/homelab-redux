@@ -4,6 +4,7 @@ import os
 import sys
 import shutil
 import subprocess
+from server_opts import ServerOpts
 
 class Config:
     SCRIPT_DIR = os.path.dirname(__file__)
@@ -15,6 +16,7 @@ class Config:
     STOCK_ISO = os.getenv("STOCK_ISO")
     OUTPUT_ISO=f"{SCRIPT_DIR}/custom.iso"
     LOG_DIR=f"{SCRIPT_DIR}/log"
+
 
 def debug(message):
     """Print debug messages if DEBUG is set."""
