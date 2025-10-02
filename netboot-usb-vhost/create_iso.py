@@ -159,6 +159,8 @@ if __name__ == "__main__":
     check_command("gunzip")
     check_command("cpio")
 
+    preseed_values = ServerOpts()
+
     # Making the image
     create_preseed_iso(
             Config.STOCK_ISO,
@@ -168,4 +170,3 @@ if __name__ == "__main__":
             Config.OUTPUT_ISO,
             Config.EFI_IMG
             )
-

@@ -11,12 +11,16 @@ class ServerOpts:
             print(f"  gateway: {host['gateway']}")
             print(f"  netmask: {host['netmask']}\n")
 
+    def get_default_gateway(self, first_ip):
+        return f"{'.'.join(first_ip.split('.')[:-1])}.1"
+
     def prompt_for_hosts(self):
         while True:
             base_name = input("Enter the base name for the servers: ")
             first_ip = input("Enter the first IP address: ")
-            gateway = input("Enter the gateway: ")
-            netmask = input("Enter the netmask: ")
+            default_gw = self.get_default_gateway(first_ip)
+            gateway = input(f"Enter the gateway (default: {default_gw}): ") or default_gw
+            netmask = input("Enter the netmask (default: 255.255.255.0): ") or "255.255.255.0"
             num_servers = int(input("Enter the number of servers: "))
 
             ip_parts = list(map(int, first_ip.split('.')))
