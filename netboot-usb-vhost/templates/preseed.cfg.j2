@@ -33,8 +33,8 @@ d-i keyboard-configuration/xkb-keymap select us
 
 # (Pick 1 of 3)
 # d-i netcfg/enable boolean false
-d-i netcfg/choose_interface select auto
-#d-i netcfg/choose_interface select eth1
+# d-i netcfg/choose_interface select auto
+# d-i netcfg/choose_interface select eth1
 
 # Static network configuration.
 #
@@ -44,11 +44,18 @@ d-i netcfg/choose_interface select auto
 #d-i netcfg/get_gateway string 192.168.1.1
 #d-i netcfg/get_nameservers string 192.168.1.1
 #d-i netcfg/confirm_static boolean true
+# Configure en0 with a static IP
+d-i netcfg/choose_interface select en0
+d-i netcfg/get_ipaddress string {{ host_ip }}
+d-i netcfg/get_netmask string {{ host_netmask }}
+d-i netcfg/get_gateway string {{ host_gateway }}
+d-i netcfg/get_nameservers string {{ host_dns }}
+d-i netcfg/confirm_static boolean true
 
 # Hostname
-d-i netcfg/get_hostname string debian-13-vhost
-d-i netcfg/get_domain string debian-13-vhost
-d-i netcfg/hostname string debian-13-vhost
+d-i netcfg/get_hostname string {{ host_hostname }}
+d-i netcfg/get_domain string {{ host_domain }}
+d-i netcfg/hostname string {{ host_hostname }}
 
 # Mirror
 d-i mirror/country string manual

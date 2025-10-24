@@ -5,18 +5,18 @@ import sys
 import shutil
 import subprocess
 from server_opts import ServerOpts
+from jinja2 import Environment, FileSystemLoader
 
 class Config:
     SCRIPT_DIR = os.path.dirname(__file__)
     TMP_DIR = os.path.join(f"{SCRIPT_DIR}", "tmp/")
     INSTALL_ARCH_DIR=f"{TMP_DIR}/install.amd"
-    PRESEED_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), "preseed.cfg")
+    PRESEED_PREFIX = os.path.join(os.path.abspath(os.path.dirname(__file__)), "preseed.cfg")
     DEBUG = os.getenv("DEBUG", "1").lower() in ("1", "true", "yes")
     EFI_IMG="boot/grub/efi.img"                 #  Location in iso
     STOCK_ISO = os.getenv("STOCK_ISO")
     OUTPUT_ISO=f"{SCRIPT_DIR}/custom.iso"
     LOG_DIR=f"{SCRIPT_DIR}/log"
-
 
 def debug(message):
     """Print debug messages if DEBUG is set."""
@@ -54,40 +54,14 @@ def verify_empty_dir(tmp_dir):
     else:
         fatal(f"{tmp_dir} is not empty or does not exist")
 
-def add_preseed_to_initrd(stock_iso, preseed_file, tmp_dir, install_arch_dir):
-    """Add a preseed file to the initrd."""
+def extract_iso(stock_iso, tmp_dir):
+    """Extract ISO"""
     debug("Extracting ISO files")
     extract_command = ["7z", "x", f"-o{tmp_dir}", stock_iso]
     with open(os.path.join(Config.LOG_DIR, "7z.log"), "w") as log_file:
         subprocess.run(extract_command, stdout=log_file, stderr=subprocess.STDOUT, check=True)
+    debug("Finished extracting ISO files")
 
-    debug("Copying preseed.cfg to ISO directory")
-    shutil.copy(preseed_file, os.path.join(tmp_dir, "preseed.cfg"))
-
-    debug("Setting write permissions on the ISO directory")
-    for root, dirs, files in os.walk(install_arch_dir):
-        for dir_name in dirs:
-            os.chmod(os.path.join(root, dir_name), 0o755)
-        for file_name in files:
-            os.chmod(os.path.join(root, file_name), 0o644)
-
-    initrd_path = os.path.join(install_arch_dir, "initrd.gz")
-
-    debug("Decompressing initrd.gz")
-    subprocess.run(["gunzip", initrd_path], check=True)
-
-    debug("Copying preseed.cfg to end of initrd")
-    initrd_uncompressed = os.path.join(install_arch_dir, "initrd")
-    preseed_command = ["cpio", "-H", "newc", "-o", "-A", "-F", initrd_uncompressed]
-    with subprocess.Popen(preseed_command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL) as proc:
-        proc.stdin.write(b"preseed.cfg")
-        proc.stdin.close()
-        proc.wait()
-
-    debug("Compressing initrd again")
-    subprocess.run(["gzip", initrd_uncompressed], check=True)
-
-    debug("Preseed successful")
 
 def regenerate_md5sums(tmp_dir):
     """Regenerate md5sums for all files in tmp_dir and save to md5sum.txt."""
@@ -138,11 +112,56 @@ def rebuild_iso_image(tmp_dir, output_iso, efi_img):
     subprocess.run(iso_command, check=True)
     debug("ISO image created")
 
-def create_preseed_iso(stock_iso, tmp_dir, install_arch_dir, preseed_file, output_iso, efi_img):
+def create_dir(base_dir, dir_name):
+    full_path = os.path.join(base_dir, dir_name)
+    debug(f"Creating directory {full_path}")
+    os.makedirs(full_path, exist_ok=True)
+    return full_path
+
+def generate_preseed_configs(tmp_dir, preseed_values):
+    env = Environment(loader=FileSystemLoader("templates"))
+    template = env.get_template("preseed.cfg.j2")
+    preseed_dir = create_dir(tmp_dir, 'preseed')
+
+    for server in preseed_values.get_hosts():
+        # FIXME: Way too many arguments!
+        preseed_cfg = template.render(
+                    host_hostname = server['name'],
+                    host_ip = server['ip'],
+                    host_gateway = server['gateway'],
+                    host_netmask = server['netmask'],
+                    host_dns = server['dns'],
+                    host_domain = server['domain'],
+                )
+        config_file = os.path.join(preseed_dir, server['config'])
+        debug(f"Writing {server['config']} preseed file to {config_file}")
+
+        with open(config_file, "w") as file:
+            file.write(preseed_cfg)
+        print(f"Config file '{server['name']}' written to '{config_file}'")
+
+def generate_grub_config(tmp_dir, preseed_values):
+    env = Environment(loader=FileSystemLoader("templates"))
+    template = env.get_template("grub.cfg.j2")
+    grub_cfg = ""
+    try:
+        grub_cfg = template.render(server_list = preseed_values.get_hosts())
+    except Exception as e:
+        fatal('Could not render template: ' + str(e))
+
+    output_file = os.path.join(tmp_dir, 'boot/grub/grub.cfg')
+
+    debug(f"Writing grub config to: {output_file}")
+    with open(output_file, "w") as file:
+        file.write(grub_cfg)
+    debug("Grub config file written")
+
+def create_preseed_iso(stock_iso, tmp_dir, install_arch_dir, preseed_file, output_iso, efi_img, preseed_values):
     """Main function to create the custom preseed ISO."""
     try:
-        verify_empty_dir(tmp_dir)
-        add_preseed_to_initrd(stock_iso, preseed_file, tmp_dir, install_arch_dir)
+        extract_iso(stock_iso, tmp_dir)
+        generate_preseed_configs(tmp_dir, preseed_values)
+        generate_grub_config(tmp_dir, preseed_values)
         regenerate_md5sums(tmp_dir)
         rebuild_iso_image(tmp_dir, output_iso, efi_img)
         print(f"Preseed ISO can be found at '{output_iso}'")
@@ -159,6 +178,11 @@ if __name__ == "__main__":
     check_command("gunzip")
     check_command("cpio")
 
+    try:
+        verify_empty_dir(Config.TMP_DIR)
+    except Exception as e:
+        fatal(str(e))
+
     preseed_values = ServerOpts()
 
     # Making the image
@@ -166,7 +190,8 @@ if __name__ == "__main__":
             Config.STOCK_ISO,
             Config.TMP_DIR,
             Config.INSTALL_ARCH_DIR,
-            Config.PRESEED_FILE,
+            Config.PRESEED_PREFIX,
             Config.OUTPUT_ISO,
-            Config.EFI_IMG
+            Config.EFI_IMG,
+            preseed_values
             )
