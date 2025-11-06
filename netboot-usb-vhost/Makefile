@@ -16,8 +16,7 @@ build: clean
 	fi
 	mkdir -p log
 	mkdir -p tmp
-	# ./create_iso.bash $(STOCK_ISO)
-	./create_iso.py -vvv
+	./create_iso.py
 
 # clean target
 .PHONY: clean
