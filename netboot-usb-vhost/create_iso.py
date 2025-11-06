@@ -4,7 +4,7 @@ import os
 import sys
 import shutil
 import subprocess
-from server_opts import ServerOpts
+from create_iso_utils.server_opts import ServerOpts
 from jinja2 import Environment, FileSystemLoader
 
 class Config:
