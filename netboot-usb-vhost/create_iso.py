@@ -156,15 +156,15 @@ def generate_grub_config(tmp_dir, preseed_values):
         file.write(grub_cfg)
     debug("Grub config file written")
 
-def create_preseed_iso(stock_iso, tmp_dir, install_arch_dir, preseed_file, output_iso, efi_img, preseed_values):
+def create_preseed_iso(config, preseed_values):
     """Main function to create the custom preseed ISO."""
     try:
-        extract_iso(stock_iso, tmp_dir)
-        generate_preseed_configs(tmp_dir, preseed_values)
-        generate_grub_config(tmp_dir, preseed_values)
-        regenerate_md5sums(tmp_dir)
-        rebuild_iso_image(tmp_dir, output_iso, efi_img)
-        print(f"Preseed ISO can be found at '{output_iso}'")
+        extract_iso(config.STOCK_ISO, config.TMP_DIR)
+        generate_preseed_configs(config.TMP_DIR, preseed_values)
+        generate_grub_config(config.TMP_DIR, preseed_values)
+        regenerate_md5sums(config.TMP_DIR)
+        rebuild_iso_image(config.TMP_DIR, config.OUTPUT_ISO, config.EFI_IMG)
+        print(f"Preseed ISO can be found at '{config.OUTPUT_ISO}'")
     except Exception as e:
         fatal(str(e))
 
@@ -186,12 +186,4 @@ if __name__ == "__main__":
     preseed_values = ServerOpts()
 
     # Making the image
-    create_preseed_iso(
-            Config.STOCK_ISO,
-            Config.TMP_DIR,
-            Config.INSTALL_ARCH_DIR,
-            Config.PRESEED_PREFIX,
-            Config.OUTPUT_ISO,
-            Config.EFI_IMG,
-            preseed_values
-            )
+    create_preseed_iso(Config, preseed_values)
