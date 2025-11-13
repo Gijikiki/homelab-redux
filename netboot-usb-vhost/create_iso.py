@@ -22,6 +22,7 @@ Requirements:
 - Python dependencies: jinja2
 """
 
+import logging
 import os
 import sys
 import shutil
@@ -54,61 +55,82 @@ class Config:
     OUTPUT_ISO=f"{SCRIPT_DIR}/custom.iso"
     LOG_DIR=f"{SCRIPT_DIR}/log"
 
+def setup_logging(debug: bool) -> None:
+    log_level = logging.INFO
+    if debug:
+        log_level = logging.DEBUG
 
-def debug(message):
-    """Print debug messages if DEBUG is set."""
-    if Config.DEBUG:
-        print(f"[DEBUG]: {message}")
+    """Configure logging module"""
+    logging.basicConfig(
+            level=log_level,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler("log/create_iso.log"),
+                logging.StreamHandler()
+            ]
+        )
+
+
+def log_subprocess_output(output) -> None:
+    output_lines = output.splitlines()
+    for line in output_lines:
+        if line.strip():
+            logging.info(f"Subprocess output: {line}")
 
 
 def fatal(message):
     """Print fatal error messages and exit."""
-    print(f"[FATAL]: {message}", file=sys.stderr)
-    sys.exit(1)
+    logging.error(message)
+    sys.exit(message)
 
 
 def check_command(command):
     """Check if a command exists on the system."""
     if not shutil.which(command):
-        fatal(f"Error: '{command}' command is required but not found. Please install it before proceeding.")
+        fatal(f"Error: '{command}' command is required but not found. " +
+            "Please install it before proceeding.")
 
 
 def check_iso_var(stock_iso):
     """Validate the STOCK_ISO variable."""
-    debug(f"Stock iso is: {stock_iso}")
+    logging.info(f"Stock iso is: {stock_iso}")
 
     if not stock_iso:
         fatal("STOCK_ISO needs to be defined!")
     elif os.path.isfile(stock_iso):
-        debug(f"'{stock_iso}' is a normal file.")
+        logging.debug(f"'{stock_iso}' is a normal file.")
     elif os.path.islink(stock_iso) and os.path.isfile(os.path.realpath(stock_iso)):
-        debug(f"'{stock_iso}' is a symlink to a normal file.")
+        logging.debug(f"'{stock_iso}' is a symlink to a normal file.")
     else:
         fatal("STOCK_ISO must be a normal file or a symlink to a normal file.")
 
 
 def verify_empty_dir(tmp_dir):
     """Verify that TMP_DIR exists and is empty."""
-    debug(tmp_dir)
+    logging.debug(f"Temp directory is {tmp_dir}")
     if os.path.isdir(tmp_dir) and not os.listdir(tmp_dir):
-        debug(f"{tmp_dir} is empty")
+        logging.debug(f"{tmp_dir} is empty")
     else:
         fatal(f"{tmp_dir} is not empty or does not exist")
 
 
 def extract_iso(stock_iso, tmp_dir):
     """Extract ISO"""
-    debug("Extracting ISO files")
+    logging.info("Extracting ISO files")
     extract_command = ["7z", "x", f"-o{tmp_dir}", stock_iso]
-    with open(os.path.join(Config.LOG_DIR, "7z.log"), "w") as log_file:
-        subprocess.run(extract_command, stdout=log_file, stderr=subprocess.STDOUT, check=True)
-    debug("Finished extracting ISO files")
+    try:
+        result = subprocess.run(extract_command, capture_output=True, text=True)
+        log_subprocess_output(result.stdout)
+        logging.info("ISO image extracted")
+    except subprocess.CalledProcessError as e:
+        fatal(f"Subprocess failed: {e.stderr}")
+    logging.info("Finished extracting ISO files")
 
 
 def regenerate_md5sums(tmp_dir):
     """Regenerate md5sums for all files in tmp_dir and save to md5sum.txt."""
 
-    debug("Regenerating md5sums")
+    logging.info("Regenerating md5sums")
     md5sum_file = os.path.join(tmp_dir, "md5sum.txt")
 
     try:
@@ -127,15 +149,15 @@ def regenerate_md5sums(tmp_dir):
                     else:
                         raise RuntimeError(f"Failed to compute md5sum for file: {file_path}")
     except Exception as e:
-        debug(f"Error while regenerating md5sums: {str(e)}")
+        logging.critical(f"Error while regenerating md5sums: {str(e)}")
         raise
 
-    debug(f"MD5sums written to {md5sum_file}")
+    logging.info(f"MD5sums written to {md5sum_file}")
 
 
 def rebuild_iso_image(tmp_dir, output_iso, efi_img):
     """Create the ISO image."""
-    debug("Creating the ISO image")
+    logging.info("Creating the ISO image")
     iso_command = [
         "xorriso",
         "-as", "mkisofs",
@@ -152,8 +174,12 @@ def rebuild_iso_image(tmp_dir, output_iso, efi_img):
         "-isohybrid-gpt-basdat",
         tmp_dir
     ]
-    subprocess.run(iso_command, check=True)
-    debug("ISO image created")
+    try:
+        result = subprocess.run(iso_command, capture_output=True, text=True)
+        log_subprocess_output(result.stderr)
+        logging.info("ISO image created")
+    except subprocess.CalledProcessError as e:
+        fatal(f"Subprocess failed: {e.stderr}")
 
 
 def create_dir(base_dir, dir_name):
@@ -168,7 +194,7 @@ def create_dir(base_dir, dir_name):
         str: The full path of the created directory.
     """
     full_path = os.path.join(base_dir, dir_name)
-    debug(f"Creating directory {full_path}")
+    logging.info(f"Creating directory {full_path}")
     os.makedirs(full_path, exist_ok=True)
     return full_path
 
@@ -198,11 +224,11 @@ def generate_preseed_configs(tmp_dir, preseed_values):
                     host_domain = server['domain'],
                 )
         config_file = os.path.join(preseed_dir, server['config'])
-        debug(f"Writing {server['config']} preseed file to {config_file}")
+        logging.info(f"Writing {server['config']} preseed file to {config_file}")
 
         with open(config_file, "w") as file:
             file.write(preseed_cfg)
-        print(f"Config file '{server['name']}' written to '{config_file}'")
+        logging.info(f"Config file '{server['name']}' written to '{config_file}'")
 
 
 def generate_grub_config(tmp_dir, preseed_values):
@@ -226,10 +252,10 @@ def generate_grub_config(tmp_dir, preseed_values):
 
     output_file = os.path.join(tmp_dir, 'boot/grub/grub.cfg')
 
-    debug(f"Writing grub config to: {output_file}")
+    logging.info(f"Writing grub config to: {output_file}")
     with open(output_file, "w") as file:
         file.write(grub_cfg)
-    debug("Grub config file written")
+    logging.info("Grub config file written")
 
 
 def create_preseed_iso(config, preseed_values):
@@ -240,13 +266,14 @@ def create_preseed_iso(config, preseed_values):
         generate_grub_config(config.TMP_DIR, preseed_values)
         regenerate_md5sums(config.TMP_DIR)
         rebuild_iso_image(config.TMP_DIR, config.OUTPUT_ISO, config.EFI_IMG)
-        print(f"Preseed ISO can be found at '{config.OUTPUT_ISO}'")
+        logging.info(f"Preseed ISO can be found at '{config.OUTPUT_ISO}'")
     except Exception as e:
         fatal(str(e))
 
 
 if __name__ == "__main__":
-    if not Config.STOCK_ISO:
+    setup_logging(Config.DEBUG)
+    if not Config.DEBUG:
         raise EnvironmentError("Error: 'STOCK_ISO' environmental variable is not defined.")
     check_iso_var(Config.STOCK_ISO)
     check_command("7z")
